@@ -609,22 +609,46 @@ EOF
 
 # ==================== 域名配置 ====================
 
-setup_domain() {
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  配置面板访问域名${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════${NC}"
-    echo ""
-    echo "输入用于访问面板的域名（需托管在 Cloudflare）"
-    echo "例如: panel.example.com"
-    echo "直接回车跳过，仅本地访问"
-    echo ""
-    read -e -p "域名: " PANEL_DOMAIN
+# 从 cert.pem 获取授权域名
+get_authorized_domain() {
+    local cert_file="${HOME}/.cloudflared/cert.pem"
+    if [ ! -f "$cert_file" ]; then
+        return 1
+    fi
     
-    if [ -z "$PANEL_DOMAIN" ]; then
-        log_info "跳过域名配置"
+    # 从证书提取域名
+    local domain=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null | sed -n 's/.*CN\s*=\s*\([^,]*\).*/\1/p' | sed 's/^\*\.//')
+    
+    if [ -z "$domain" ]; then
+        # 备用方法：从 SAN 提取
+        domain=$(openssl x509 -in "$cert_file" -noout -text 2>/dev/null | grep -A1 "Subject Alternative Name" | tail -1 | sed 's/.*DNS:\*\.\([^,]*\).*/\1/' | head -1)
+    fi
+    
+    echo "$domain"
+}
+
+# 生成随机子域名
+generate_subdomain() {
+    cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 8 | head -n 1
+}
+
+setup_domain() {
+    log_info "配置面板域名..."
+    
+    # 获取授权域名
+    local base_domain=$(get_authorized_domain)
+    
+    if [ -z "$base_domain" ]; then
+        log_warn "无法获取授权域名，跳过域名配置"
+        log_info "可稍后手动配置域名"
         return
     fi
+    
+    # 生成随机子域名
+    local subdomain="panel-$(generate_subdomain)"
+    PANEL_DOMAIN="${subdomain}.${base_domain}"
+    
+    log_info "生成域名: $PANEL_DOMAIN"
     
     # 更新隧道配置
     cat > ~/.cloudflared/config.yml << EOF
@@ -639,10 +663,11 @@ EOF
 
     # 配置 DNS
     log_info "配置 DNS 记录..."
-    cloudflared tunnel route dns "$TUNNEL_NAME" "$PANEL_DOMAIN" 2>/dev/null || \
-        log_warn "DNS 配置可能需要手动在 Cloudflare 面板完成"
-    
-    log_info "域名配置完成: https://${PANEL_DOMAIN}"
+    if cloudflared tunnel route dns "$TUNNEL_NAME" "$PANEL_DOMAIN" 2>/dev/null; then
+        log_info "域名配置完成: https://${PANEL_DOMAIN}"
+    else
+        log_warn "DNS 配置失败，可能需要手动配置"
+    fi
 }
 
 # ==================== 启动服务 ====================
