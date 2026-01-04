@@ -328,29 +328,42 @@ login_cloudflare() {
 }
 
 create_tunnel() {
-    local tunnel_name="cloudtunnel"
+    local base_name="cloudtunnel"
+    local tunnel_name=""
+    local suffix=""
     
-    # 检查隧道是否存在
-    if cloudflared tunnel list 2>/dev/null | grep -q "$tunnel_name"; then
-        TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
+    # 生成随机4位后缀
+    generate_suffix() {
+        cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 4 | head -n 1
+    }
+    
+    # 先尝试基础名称
+    if cloudflared tunnel list 2>/dev/null | grep -q "^[a-f0-9-]\+\s\+${base_name}\s"; then
+        TUNNEL_ID=$(cloudflared tunnel list | grep "${base_name}" | head -1 | awk '{print $1}')
         local cred_file="${HOME}/.cloudflared/${TUNNEL_ID}.json"
         
-        # 检查本地凭证文件是否存在
         if [ -f "$cred_file" ]; then
-            log_info "隧道 $tunnel_name 已存在，凭证有效"
+            tunnel_name="$base_name"
+            log_info "使用已有隧道: $tunnel_name"
         else
-            log_warn "隧道存在但本地无凭证，删除并重新创建..."
-            cloudflared tunnel delete "$tunnel_name" 2>/dev/null || true
+            # 本地无凭证，创建新隧道
+            suffix=$(generate_suffix)
+            tunnel_name="${base_name}-${suffix}"
+            log_info "创建新隧道: $tunnel_name"
             cloudflared tunnel create "$tunnel_name"
             TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
         fi
     else
-        log_info "创建隧道 $tunnel_name..."
+        tunnel_name="$base_name"
+        log_info "创建隧道: $tunnel_name"
         cloudflared tunnel create "$tunnel_name"
         TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
     fi
     
     log_info "隧道 ID: $TUNNEL_ID"
+    
+    # 保存隧道名供后续使用
+    TUNNEL_NAME="$tunnel_name"
     
     # 创建基础配置
     mkdir -p ~/.cloudflared
@@ -626,7 +639,7 @@ EOF
 
     # 配置 DNS
     log_info "配置 DNS 记录..."
-    cloudflared tunnel route dns cloudtunnel "$PANEL_DOMAIN" 2>/dev/null || \
+    cloudflared tunnel route dns "$TUNNEL_NAME" "$PANEL_DOMAIN" 2>/dev/null || \
         log_warn "DNS 配置可能需要手动在 Cloudflare 面板完成"
     
     log_info "域名配置完成: https://${PANEL_DOMAIN}"
