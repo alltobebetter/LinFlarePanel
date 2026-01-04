@@ -616,13 +616,28 @@ get_authorized_domain() {
         return 1
     fi
     
-    # 从证书提取域名
-    local domain=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null | sed -n 's/.*CN\s*=\s*\([^,]*\).*/\1/p' | sed 's/^\*\.//')
+    # cert.pem 是 base64 编码的 JSON，包含 zoneID 和 apiToken
+    local token_line=$(grep -v "^-----" "$cert_file" | tr -d '\n')
+    local json=$(echo "$token_line" | base64 -d 2>/dev/null)
     
-    if [ -z "$domain" ]; then
-        # 备用方法：从 SAN 提取
-        domain=$(openssl x509 -in "$cert_file" -noout -text 2>/dev/null | grep -A1 "Subject Alternative Name" | tail -1 | sed 's/.*DNS:\*\.\([^,]*\).*/\1/' | head -1)
+    if [ -z "$json" ]; then
+        return 1
     fi
+    
+    # 提取 zoneID 和 apiToken
+    local zone_id=$(echo "$json" | grep -o '"zoneID":"[^"]*"' | cut -d'"' -f4)
+    local api_token=$(echo "$json" | grep -o '"apiToken":"[^"]*"' | cut -d'"' -f4)
+    
+    if [ -z "$zone_id" ] || [ -z "$api_token" ]; then
+        return 1
+    fi
+    
+    # 调用 Cloudflare API 获取域名
+    local domain=$(curl -s --connect-timeout 10 -X GET \
+        "https://api.cloudflare.com/client/v4/zones/${zone_id}" \
+        -H "Authorization: Bearer ${api_token}" \
+        -H "Content-Type: application/json" 2>/dev/null | \
+        grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
     
     echo "$domain"
 }
