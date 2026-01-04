@@ -332,11 +332,21 @@ create_tunnel() {
     
     # 检查隧道是否存在
     if cloudflared tunnel list 2>/dev/null | grep -q "$tunnel_name"; then
-        log_info "隧道 $tunnel_name 已存在"
         TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
+        local cred_file="${HOME}/.cloudflared/${TUNNEL_ID}.json"
+        
+        # 检查本地凭证文件是否存在
+        if [ -f "$cred_file" ]; then
+            log_info "隧道 $tunnel_name 已存在，凭证有效"
+        else
+            log_warn "隧道存在但本地无凭证，删除并重新创建..."
+            cloudflared tunnel delete "$tunnel_name" 2>/dev/null || true
+            cloudflared tunnel create "$tunnel_name"
+            TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
+        fi
     else
         log_info "创建隧道 $tunnel_name..."
-        cloudflared tunnel create $tunnel_name
+        cloudflared tunnel create "$tunnel_name"
         TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
     fi
     
