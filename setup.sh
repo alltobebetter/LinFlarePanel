@@ -482,10 +482,8 @@ create_start_scripts() {
     # cloudflared 启动脚本
     cat > "${home_dir}/start_cloudflared.sh" << 'SCRIPT'
 #!/bin/bash
-if pgrep -f "cloudflared tunnel run" >/dev/null; then
-    echo "Cloudflared 已在运行"
-    exit 0
-fi
+pkill -f "cloudflared tunnel run" 2>/dev/null || true
+sleep 1
 nohup cloudflared tunnel run > /var/log/cloudflared.log 2>&1 &
 echo $! > /tmp/cloudflared.pid
 echo "Cloudflared 已启动 (PID: $!)"
@@ -507,10 +505,8 @@ SCRIPT
     # 面板启动脚本
     cat > "${home_dir}/start_cloudtunnel.sh" << SCRIPT
 #!/bin/bash
-if pgrep -f "python.*app.py" >/dev/null; then
-    echo "CloudTunnel 已在运行"
-    exit 0
-fi
+pkill -f "python.*app.py" 2>/dev/null || true
+sleep 1
 cd $INSTALL_DIR
 source venv/bin/activate
 nohup python app.py > /var/log/cloudtunnel.log 2>&1 &
@@ -692,6 +688,12 @@ start_services() {
     
     local home_dir="${HOME}"
     [ -n "$SUDO_USER" ] && home_dir=$(eval echo ~$SUDO_USER)
+    
+    # 先停掉可能存在的旧进程
+    pkill -f "cloudflared tunnel run" 2>/dev/null || true
+    pkill -f "python.*app.py" 2>/dev/null || true
+    rm -f /tmp/cloudflared.pid /tmp/cloudtunnel.pid 2>/dev/null || true
+    sleep 1
     
     if [ "$HAS_SYSTEMD" = true ]; then
         systemctl start cloudflared cloudtunnel 2>/dev/null || {
