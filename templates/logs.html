@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统日志 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>系统日志</h1>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <select class="form-input" style="width: 180px;" id="levelFilter" onchange="filterLogs()">
+                <option value="">所有级别</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索日志..." id="searchInput" oninput="searchLogs()">
+            <div style="flex: 1"></div>
+            <button class="btn" onclick="window.location.reload()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                刷新
+            </button>
+        </div>
+
+        <div class="logs-container" id="logsContainer">
+            {% for log in logs %}
+            <div class="log-entry {{ log.level|lower }}" data-level="{{ log.level }}" data-message="{{ log.message }}">
+                <span class="log-time">{{ log.time }}</span>
+                <span class="log-level level-{{ log.level|lower }}">{{ log.level }}</span>
+                <span class="log-message">{{ log.message }}</span>
+            </div>
+            {% endfor %}
+            
+            {% if not logs %}
+            <div class="empty-state" style="padding: 60px 20px;">
+                <div class="empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <div class="empty-text">暂无日志</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}" class="btn btn-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                上一页
+            </a>
+            {% else %}
+            <button class="btn btn-sm" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                上一页
+            </button>
+            {% endif %}
+            
+            <span class="page-info">第 {{ page }} 页 / 共 {{ total_pages }} 页</span>
+            
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}" class="btn btn-sm">
+                下一页
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </a>
+            {% else %}
+            <button class="btn btn-sm" disabled>
+                下一页
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function filterLogs() {
+            const level = document.getElementById('levelFilter').value;
+            const entries = document.querySelectorAll('.log-entry');
+            
+            entries.forEach(entry => {
+                if (!level || entry.dataset.level === level) {
+                    entry.style.display = '';
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+        }
+        
+        function searchLogs() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const entries = document.querySelectorAll('.log-entry');
+            
+            entries.forEach(entry => {
+                const message = entry.dataset.message.toLowerCase();
+                if (message.includes(query)) {
+                    entry.style.display = '';
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

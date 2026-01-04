@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网站部署 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>网站部署</h1>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="deploy-form-card">
+            <h3>新建部署</h3>
+            <form class="deploy-form" onsubmit="createDeployment(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>选择项目（可选）</label>
+                        <select class="form-input" id="projectId">
+                            <option value="">不关联项目</option>
+                            {% for project in projects %}
+                            <option value="{{ project.id }}">{{ project.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>本地端口</label>
+                        <input type="number" placeholder="例如: 8080, 3000" class="form-input" id="port" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>子域名</label>
+                        <input type="text" placeholder="例如: blog, api, test" class="form-input" id="subdomain" required>
+                    </div>
+                    <div class="form-group">
+                        <label>主域名</label>
+                        <select class="form-input" id="domain" required>
+                            {% if domains %}
+                                {% for domain in domains %}
+                                <option value="{{ domain }}">{{ domain }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>请先配置 Cloudflare API Token</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary full-width" {% if not domains %}disabled{% endif %}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    创建部署
+                </button>
+                
+                {% if not domains %}
+                <p style="text-align: center; color: var(--text-muted); margin-top: 12px; font-size: 13px;">
+                    请先在 <a href="/settings" style="color: var(--accent-secondary);">设置页面</a> 配置 Cloudflare API Token
+                </p>
+                {% endif %}
+            </form>
+        </div>
+
+        <div class="deployments-card">
+            <h3>当前部署</h3>
+            
+            <div id="deploymentsList">
+            {% for deployment in deployments %}
+            <div class="deployment-item" data-id="{{ deployment.id }}" style="border-left-color: {{ 'var(--success)' if deployment.status == 'running' else 'var(--error)' }}">
+                <div class="deployment-info">
+                    <div class="deployment-url">
+                        {{ deployment.subdomain }}.{{ deployment.domain }}
+                    </div>
+                    <div class="deployment-meta">
+                        {{ deployment.project or '未关联项目' }}
+                        <span>·</span>
+                        端口: {{ deployment.port }}
+                        <span class="status-badge {{ deployment.status }}">
+                            {{ '运行中' if deployment.status == 'running' else '已停止' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="deployment-actions">
+                    <a href="https://{{ deployment.subdomain }}.{{ deployment.domain }}" target="_blank" class="btn btn-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        访问
+                    </a>
+                    {% if deployment.status == 'running' %}
+                    <button class="btn btn-sm" onclick="stopDeployment({{ deployment.id }})">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="6" y="4" width="4" height="16"/>
+                            <rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                        停止
+                    </button>
+                    {% else %}
+                    <button class="btn btn-sm" onclick="startDeployment({{ deployment.id }})">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        启动
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-sm danger" onclick="deleteDeployment({{ deployment.id }})">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        删除
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            </div>
+
+            {% if not deployments %}
+            <div class="empty-state" style="padding: 40px 20px;" id="emptyState">
+                <div class="empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                </div>
+                <div class="empty-text">暂无部署</div>
+                <div class="empty-hint">创建一个部署，将项目暴露到公网</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="info-card">
+            <h3>Cloudflare Tunnel 状态</h3>
+            <div class="info-row">
+                <span class="info-label">隧道状态</span>
+                <span class="info-value">
+                    <span class="status-badge {{ tunnel_status }}">{{ '运行中' if tunnel_status == 'running' else '已停止' }}</span>
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">隧道名称</span>
+                <span class="info-value code">{{ tunnel_name or '未配置' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">活跃部署</span>
+                <span class="info-value">{{ active_connections }} 个</span>
+            </div>
+            <div style="margin-top: 16px;">
+                <button class="btn" onclick="restartTunnel()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    重启隧道
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function createDeployment(e) {
+            e.preventDefault();
+            
+            const data = {
+                project_id: document.getElementById('projectId').value || null,
+                subdomain: document.getElementById('subdomain').value.trim(),
+                domain: document.getElementById('domain').value,
+                port: document.getElementById('port').value
+            };
+            
+            if (!data.subdomain || !data.domain || !data.port) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/api/deploy', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await resp.json();
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert(result.error || '创建失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function startDeployment(id) {
+            try {
+                const resp = await fetch(`/api/deploy/${id}/start`, {method: 'POST'});
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '启动失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function stopDeployment(id) {
+            try {
+                const resp = await fetch(`/api/deploy/${id}/stop`, {method: 'POST'});
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '停止失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function deleteDeployment(id) {
+            if (!confirm('确定要删除这个部署吗？')) return;
+            
+            try {
+                const resp = await fetch(`/api/deploy/${id}`, {method: 'DELETE'});
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '删除失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function restartTunnel() {
+            if (!confirm('确定要重启隧道吗？这会短暂中断所有部署的访问。')) return;
+            
+            try {
+                const resp = await fetch('/api/tunnel/restart', {method: 'POST'});
+                if (resp.ok) {
+                    alert('隧道已重启');
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '重启失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+    </script>
+</body>
+</html>

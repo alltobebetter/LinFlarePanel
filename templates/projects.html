@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目管理 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1>项目管理</h1>
+                <p class="breadcrumb">/pjdata/{{ user }}</p>
+            </div>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showCreateModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                新建项目
+            </button>
+            <div style="flex: 1"></div>
+            <input type="text" class="search-input" placeholder="搜索项目..." id="searchInput" oninput="filterProjects()">
+        </div>
+
+        <div class="projects-grid" id="projectsGrid">
+            {% for project in projects %}
+            <div class="project-card" data-name="{{ project.name }}">
+                <div class="project-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <div class="project-info">
+                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-meta">
+                        <span>{{ project.files_count }} 个文件</span>
+                        <span>·</span>
+                        <span>{{ project.modified }}</span>
+                    </div>
+                </div>
+                <div class="project-actions">
+                    <a href="/projects/{{ project.id }}" class="btn btn-sm btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        进入
+                    </a>
+                    <a href="/deploy?project={{ project.id }}" class="btn btn-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        部署
+                    </a>
+                    <button class="btn btn-sm danger" onclick="deleteProject('{{ project.id }}', '{{ project.name }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        删除
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if not projects %}
+        <div class="empty-state" id="emptyState">
+            <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+            </div>
+            <div class="empty-text">暂无项目</div>
+            <div class="empty-hint">点击"新建项目"创建你的第一个项目</div>
+        </div>
+        {% endif %}
+
+        <div class="storage-info">
+            <div class="storage-label">存储空间使用情况</div>
+            <div class="progress-bar large">
+                <div class="progress-fill" style="width: 45%"></div>
+            </div>
+            <div class="storage-text">已使用 {{ storage.used_formatted if storage else '0 B' }}</div>
+        </div>
+    </div>
+
+    <!-- 新建项目弹窗 -->
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新建项目</h3>
+                <button class="modal-close" onclick="hideCreateModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>项目名称</label>
+                    <input type="text" class="form-input" id="projectName" placeholder="输入项目名称">
+                </div>
+                <div class="form-group">
+                    <label>项目描述（可选）</label>
+                    <input type="text" class="form-input" id="projectDesc" placeholder="简单描述这个项目">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideCreateModal()">取消</button>
+                <button class="btn btn-primary" onclick="createProject()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showCreateModal() {
+            document.getElementById('createModal').classList.add('show');
+            document.getElementById('projectName').focus();
+        }
+        
+        function hideCreateModal() {
+            document.getElementById('createModal').classList.remove('show');
+            document.getElementById('projectName').value = '';
+            document.getElementById('projectDesc').value = '';
+        }
+        
+        document.getElementById('createModal').addEventListener('click', function(e) {
+            if (e.target === this) hideCreateModal();
+        });
+        
+        async function createProject() {
+            const name = document.getElementById('projectName').value.trim();
+            const description = document.getElementById('projectDesc').value.trim();
+            
+            if (!name) {
+                alert('请输入项目名称');
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, description})
+                });
+                
+                const data = await resp.json();
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || '创建失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function deleteProject(id, name) {
+            if (!confirm(`确定要删除项目 "${name}" 吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`/api/projects/${id}`, {method: 'DELETE'});
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || '删除失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        function filterProjects() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.project-card');
+            
+            cards.forEach(card => {
+                const name = card.dataset.name.toLowerCase();
+                card.style.display = name.includes(query) ? '' : 'none';
+            });
+        }
+        
+        // Enter 键创建项目
+        document.getElementById('projectName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') createProject();
+        });
+    </script>
+</body>
+</html>

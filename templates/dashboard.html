@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统概览 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>系统概览</h1>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon cpu">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                            <rect x="9" y="9" width="6" height="6"/>
+                            <line x1="9" y1="1" x2="9" y2="4"/>
+                            <line x1="15" y1="1" x2="15" y2="4"/>
+                            <line x1="9" y1="20" x2="9" y2="23"/>
+                            <line x1="15" y1="20" x2="15" y2="23"/>
+                            <line x1="20" y1="9" x2="23" y2="9"/>
+                            <line x1="20" y1="14" x2="23" y2="14"/>
+                            <line x1="1" y1="9" x2="4" y2="9"/>
+                            <line x1="1" y1="14" x2="4" y2="14"/>
+                        </svg>
+                    </div>
+                    <span class="stat-label">CPU 使用率</span>
+                </div>
+                <div class="stat-value">{{ system_stats.cpu.usage }}%</div>
+                <div class="stat-meta">{{ system_stats.cpu.cores }} 核心 · {{ system_stats.cpu.model }}</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ system_stats.cpu.usage }}%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon memory">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="6" width="20" height="12" rx="2"/>
+                            <line x1="6" y1="10" x2="6" y2="14"/>
+                            <line x1="10" y1="10" x2="10" y2="14"/>
+                            <line x1="14" y1="10" x2="14" y2="14"/>
+                            <line x1="18" y1="10" x2="18" y2="14"/>
+                        </svg>
+                    </div>
+                    <span class="stat-label">内存使用</span>
+                </div>
+                <div class="stat-value">{{ "%.1f"|format(system_stats.memory.usage) }}%</div>
+                <div class="stat-meta">{{ system_stats.memory.used }} GB / {{ system_stats.memory.total }} GB</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ system_stats.memory.usage }}%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon disk">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                        </svg>
+                    </div>
+                    <span class="stat-label">磁盘使用</span>
+                </div>
+                <div class="stat-value">{{ "%.1f"|format(system_stats.disk.usage) }}%</div>
+                <div class="stat-meta">{{ system_stats.disk.used }} GB / {{ system_stats.disk.total }} GB</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ system_stats.disk.usage }}%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon network">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                            <line x1="12" y1="20" x2="12.01" y2="20"/>
+                        </svg>
+                    </div>
+                    <span class="stat-label">网络流量</span>
+                </div>
+                <div class="stat-value">↑{{ system_stats.network.upload }} MB/s</div>
+                <div class="stat-meta">↓{{ system_stats.network.download }} MB/s</div>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>系统信息</h3>
+                <div class="info-row">
+                    <span class="info-label">运行时间</span>
+                    <span class="info-value">{{ system_stats.uptime }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">系统负载</span>
+                    <span class="info-value">{{ system_stats.load[0] }} / {{ system_stats.load[1] }} / {{ system_stats.load[2] }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">CPU 温度</span>
+                    <span class="info-value">{{ system_stats.cpu.temp }}°C</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">启动时间</span>
+                    <span class="info-value">{{ system_stats.boot_time }}</span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>项目目录</h3>
+                <div class="info-row">
+                    <span class="info-label">项目根目录</span>
+                    <span class="info-value code">/pjdata/{{ user }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">项目数量</span>
+                    <span class="info-value">{{ project_count }} 个</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">部署数量</span>
+                    <span class="info-value">{{ deploy_count }} 个</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">隧道状态</span>
+                    <span class="info-value">
+                        <span class="status-badge running">运行中</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>快速操作</h3>
+            <div class="monitor-grid">
+                <div class="monitor-item">
+                    <div class="monitor-label">进程数</div>
+                    <div class="monitor-value">{{ system_stats.processes }}<span> 个</span></div>
+                </div>
+                <div class="monitor-item">
+                    <div class="monitor-label">TCP 连接</div>
+                    <div class="monitor-value">{{ system_stats.tcp_connections }}<span> 个</span></div>
+                </div>
+                <div class="monitor-item">
+                    <div class="monitor-label">活跃部署</div>
+                    <div class="monitor-value">{{ active_deploys }}<span> 个</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

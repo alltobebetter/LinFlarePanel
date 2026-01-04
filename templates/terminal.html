@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>终端 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <style>
+        .terminal-wrapper {
+            background: #08080c;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            overflow: hidden;
+            border-top: 2px solid var(--accent);
+        }
+        .terminal-wrapper .terminal-header {
+            background: #0c0c12;
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #terminal {
+            padding: 12px;
+            height: calc(100vh - 280px);
+            min-height: 400px;
+        }
+        .xterm {
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1>终端</h1>
+                <p class="breadcrumb">{{ hostname }}</p>
+            </div>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="terminal-wrapper">
+            <div class="terminal-header">
+                <div class="terminal-tabs">
+                    <div class="terminal-tab active">bash</div>
+                </div>
+                <div class="terminal-controls">
+                    <button class="terminal-btn" title="清屏" onclick="clearTerminal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div id="terminal"></div>
+        </div>
+
+        <div class="terminal-info" style="margin-top: 20px;">
+            <div class="info-badge">
+                <span class="info-badge-label">主机名</span>
+                <span class="info-badge-value code">{{ hostname }}</span>
+            </div>
+            <div class="info-badge">
+                <span class="info-badge-label">当前用户</span>
+                <span class="info-badge-value">{{ user }}</span>
+            </div>
+            <div class="info-badge">
+                <span class="info-badge-label">连接状态</span>
+                <span class="info-badge-value" id="connectionStatus">连接中...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
+    <script>
+        const term = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+            theme: {
+                background: '#08080c',
+                foreground: '#e4e4e7',
+                cursor: '#22d3ee',
+                cursorAccent: '#08080c',
+                selection: 'rgba(99, 102, 241, 0.3)',
+                black: '#1a1a24',
+                red: '#ef4444',
+                green: '#10b981',
+                yellow: '#f59e0b',
+                blue: '#6366f1',
+                magenta: '#a855f7',
+                cyan: '#22d3ee',
+                white: '#e4e4e7',
+                brightBlack: '#5c5c6a',
+                brightRed: '#fca5a5',
+                brightGreen: '#34d399',
+                brightYellow: '#fbbf24',
+                brightBlue: '#818cf8',
+                brightMagenta: '#c084fc',
+                brightCyan: '#67e8f9',
+                brightWhite: '#f0f0f5'
+            }
+        });
+        
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        
+        const terminalEl = document.getElementById('terminal');
+        term.open(terminalEl);
+        fitAddon.fit();
+        
+        // WebSocket 连接
+        const socket = io('/terminal', {
+            transports: ['websocket']
+        });
+        
+        socket.on('connect', () => {
+            document.getElementById('connectionStatus').textContent = '已连接';
+            document.getElementById('connectionStatus').style.color = 'var(--success)';
+            
+            // 发送终端大小
+            socket.emit('resize', {rows: term.rows, cols: term.cols});
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('connectionStatus').textContent = '已断开';
+            document.getElementById('connectionStatus').style.color = 'var(--error)';
+            term.write('\r\n\x1b[31m连接已断开\x1b[0m\r\n');
+        });
+        
+        socket.on('output', (data) => {
+            term.write(data.data);
+        });
+        
+        // 发送输入到服务器
+        term.onData((data) => {
+            socket.emit('input', data);
+        });
+        
+        // 窗口大小变化时调整终端
+        window.addEventListener('resize', () => {
+            fitAddon.fit();
+            socket.emit('resize', {rows: term.rows, cols: term.cols});
+        });
+        
+        function clearTerminal() {
+            term.clear();
+        }
+    </script>
+</body>
+</html>

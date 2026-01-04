@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.name }} - 文件管理</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1>{{ project.name }}</h1>
+                <p class="breadcrumb">
+                    <a href="/projects" class="breadcrumb-link">项目管理</a>
+                    <span class="breadcrumb-sep">/</span>
+                    <span>{{ project.name }}</span>
+                    {% if current_path %}
+                    <span class="breadcrumb-sep">/</span>
+                    <span>{{ current_path }}</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            {% if current_path %}
+            <a href="/projects/{{ project.id }}{% if '/' in current_path %}?path={{ current_path.rsplit('/', 1)[0] }}{% endif %}" class="btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                返回上级
+            </a>
+            {% else %}
+            <a href="/projects" class="btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                返回项目
+            </a>
+            {% endif %}
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                上传文件
+            </button>
+            <input type="file" id="fileInput" style="display:none" onchange="uploadFile(this)" multiple>
+            <button class="btn" onclick="showFolderModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/>
+                    <line x1="9" y1="14" x2="15" y2="14"/>
+                </svg>
+                新建文件夹
+            </button>
+            <button class="btn" onclick="showFileModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                </svg>
+                新建文件
+            </button>
+            <div style="flex: 1"></div>
+            <input type="text" class="search-input" placeholder="搜索文件..." id="searchInput" oninput="filterFiles()">
+        </div>
+
+        <div class="file-manager">
+            <div class="file-header">
+                <div class="file-col-name">名称</div>
+                <div class="file-col-size">大小</div>
+                <div class="file-col-modified">修改时间</div>
+                <div class="file-col-actions">操作</div>
+            </div>
+            
+            {% for file in files %}
+            <div class="file-row" data-name="{{ file.name }}" data-type="{{ file.type }}">
+                <div class="file-col-name">
+                    <span class="file-icon {% if file.type == 'folder' %}folder{% endif %}">
+                        {% if file.type == 'folder' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        {% else %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        {% endif %}
+                    </span>
+                    {% if file.type == 'folder' %}
+                    <a href="/projects/{{ project.id }}?path={{ (current_path + '/' if current_path else '') + file.name }}" class="file-name">{{ file.name }}</a>
+                    {% else %}
+                    <span class="file-name" style="cursor:pointer" onclick="editFile('{{ (current_path + '/' if current_path else '') + file.name }}')">{{ file.name }}</span>
+                    {% endif %}
+                </div>
+                <div class="file-col-size">{{ file.size }}</div>
+                <div class="file-col-modified">{{ file.modified }}</div>
+                <div class="file-col-actions">
+                    {% if file.type == 'file' %}
+                    <button class="action-btn" title="下载" onclick="downloadFile('{{ (current_path + '/' if current_path else '') + file.name }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </button>
+                    <button class="action-btn" title="编辑" onclick="editFile('{{ (current_path + '/' if current_path else '') + file.name }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                    <button class="action-btn" title="删除" onclick="deleteItem('{{ (current_path + '/' if current_path else '') + file.name }}', '{{ file.name }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if not files %}
+        <div class="empty-state" style="padding: 60px 20px;">
+            <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+            </div>
+            <div class="empty-text">文件夹为空</div>
+            <div class="empty-hint">上传文件或创建新文件开始</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 新建文件夹弹窗 -->
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新建文件夹</h3>
+                <button class="modal-close" onclick="hideFolderModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>文件夹名称</label>
+                    <input type="text" class="form-input" id="folderName" placeholder="输入文件夹名称">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideFolderModal()">取消</button>
+                <button class="btn btn-primary" onclick="createFolder()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件弹窗 -->
+    <div class="modal-overlay" id="fileModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新建文件</h3>
+                <button class="modal-close" onclick="hideFileModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>文件名称</label>
+                    <input type="text" class="form-input" id="fileName" placeholder="例如: index.html">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideFileModal()">取消</button>
+                <button class="btn btn-primary" onclick="createFile()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑器弹窗 -->
+    <div class="modal-overlay" id="editorModal" style="padding: 20px;">
+        <div class="modal" style="max-width: 90%; width: 1200px; height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3 id="editorTitle">编辑文件</h3>
+                <button class="modal-close" onclick="hideEditorModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="flex: 1; padding: 0; overflow: hidden;">
+                <div id="monacoEditor" style="width: 100%; height: 100%;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideEditorModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveFile()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    保存 (Ctrl+S)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script>
+        const projectId = '{{ project.id }}';
+        const currentPath = '{{ current_path }}';
+        let editor = null;
+        let currentFilePath = '';
+        
+        // Monaco Editor 初始化
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+        
+        function getLanguage(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const map = {
+                'js': 'javascript', 'ts': 'typescript', 'py': 'python',
+                'html': 'html', 'htm': 'html', 'css': 'css', 'scss': 'scss',
+                'json': 'json', 'xml': 'xml', 'md': 'markdown',
+                'yaml': 'yaml', 'yml': 'yaml', 'sh': 'shell',
+                'sql': 'sql', 'php': 'php', 'rb': 'ruby', 'go': 'go',
+                'java': 'java', 'c': 'c', 'cpp': 'cpp', 'h': 'c'
+            };
+            return map[ext] || 'plaintext';
+        }
+        
+        function showFolderModal() {
+            document.getElementById('folderModal').classList.add('show');
+            document.getElementById('folderName').focus();
+        }
+        
+        function hideFolderModal() {
+            document.getElementById('folderModal').classList.remove('show');
+            document.getElementById('folderName').value = '';
+        }
+        
+        function showFileModal() {
+            document.getElementById('fileModal').classList.add('show');
+            document.getElementById('fileName').focus();
+        }
+        
+        function hideFileModal() {
+            document.getElementById('fileModal').classList.remove('show');
+            document.getElementById('fileName').value = '';
+        }
+        
+        function showEditorModal() {
+            document.getElementById('editorModal').classList.add('show');
+        }
+        
+        function hideEditorModal() {
+            document.getElementById('editorModal').classList.remove('show');
+        }
+        
+        // 点击遮罩关闭
+        ['folderModal', 'fileModal'].forEach(id => {
+            document.getElementById(id).addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('show');
+                }
+            });
+        });
+        
+        async function createFolder() {
+            const name = document.getElementById('folderName').value.trim();
+            if (!name) {
+                alert('请输入文件夹名称');
+                return;
+            }
+            
+            const path = currentPath ? `${currentPath}/${name}` : name;
+            
+            try {
+                const resp = await fetch(`/api/projects/${projectId}/files/folder`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path})
+                });
+                
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '创建失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function createFile() {
+            const name = document.getElementById('fileName').value.trim();
+            if (!name) {
+                alert('请输入文件名称');
+                return;
+            }
+            
+            const path = currentPath ? `${currentPath}/${name}` : name;
+            
+            try {
+                const resp = await fetch(`/api/projects/${projectId}/files/write`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path, content: ''})
+                });
+                
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '创建失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function uploadFile(input) {
+            const files = input.files;
+            if (!files.length) return;
+            
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('path', currentPath);
+                
+                try {
+                    const resp = await fetch(`/api/projects/${projectId}/files/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!resp.ok) {
+                        const data = await resp.json();
+                        alert(`上传 ${file.name} 失败: ${data.error}`);
+                    }
+                } catch (e) {
+                    alert(`上传 ${file.name} 失败`);
+                }
+            }
+            
+            window.location.reload();
+        }
+        
+        function downloadFile(path) {
+            window.open(`/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`);
+        }
+        
+        async function deleteItem(path, name) {
+            if (!confirm(`确定要删除 "${name}" 吗？`)) return;
+            
+            try {
+                const resp = await fetch(`/api/projects/${projectId}/files/delete`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path})
+                });
+                
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '删除失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function editFile(path) {
+            currentFilePath = path;
+            document.getElementById('editorTitle').textContent = `编辑: ${path.split('/').pop()}`;
+            
+            try {
+                const resp = await fetch(`/api/projects/${projectId}/files/read?path=${encodeURIComponent(path)}`);
+                const data = await resp.json();
+                
+                if (!resp.ok) {
+                    alert(data.error || '读取失败');
+                    return;
+                }
+                
+                showEditorModal();
+                
+                require(['vs/editor/editor.main'], function() {
+                    if (editor) {
+                        editor.dispose();
+                    }
+                    
+                    editor = monaco.editor.create(document.getElementById('monacoEditor'), {
+                        value: data.content,
+                        language: getLanguage(path),
+                        theme: 'vs-dark',
+                        automaticLayout: true,
+                        minimap: { enabled: true },
+                        fontSize: 14,
+                        lineNumbers: 'on',
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on'
+                    });
+                    
+                    // Ctrl+S 保存
+                    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveFile);
+                });
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function saveFile() {
+            if (!editor || !currentFilePath) return;
+            
+            const content = editor.getValue();
+            
+            try {
+                const resp = await fetch(`/api/projects/${projectId}/files/write`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path: currentFilePath, content})
+                });
+                
+                if (resp.ok) {
+                    // 显示保存成功提示
+                    const btn = document.querySelector('#editorModal .btn-primary');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '✓ 已保存';
+                    setTimeout(() => btn.innerHTML = originalText, 1500);
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '保存失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        function filterFiles() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.querySelectorAll('.file-row');
+            
+            rows.forEach(row => {
+                const name = row.dataset.name.toLowerCase();
+                row.style.display = name.includes(query) ? '' : 'none';
+            });
+        }
+        
+        // Enter 键创建
+        document.getElementById('folderName').addEventListener('keypress', e => {
+            if (e.key === 'Enter') createFolder();
+        });
+        document.getElementById('fileName').addEventListener('keypress', e => {
+            if (e.key === 'Enter') createFile();
+        });
+    </script>
+</body>
+</html>

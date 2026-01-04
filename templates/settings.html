@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - CloudTunnel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'sidebar.html' %}
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>系统设置</h1>
+            <div class="user-info">
+                <span class="user-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ user }}
+                </span>
+                <a href="/logout" class="logout-btn">退出</a>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>用户信息</h3>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" value="{{ user }}" class="form-input" readonly>
+            </div>
+            <div class="form-group">
+                <label>项目目录</label>
+                <input type="text" value="/pjdata/{{ user }}" class="form-input" readonly>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>修改密码</h3>
+            <form onsubmit="changePassword(event)">
+                <div class="form-group">
+                    <label>当前密码</label>
+                    <input type="password" class="form-input" id="oldPassword" placeholder="请输入当前密码" required>
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" class="form-input" id="newPassword" placeholder="请输入新密码（至少6位）" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>确认新密码</label>
+                    <input type="password" class="form-input" id="confirmPassword" placeholder="请再次输入新密码" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    更新密码
+                </button>
+            </form>
+        </div>
+
+        <div class="settings-section">
+            <h3>Cloudflare API</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+                配置 Cloudflare API Token 以获取域名列表。需要 Zone:Read 权限。
+                <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" style="color: var(--accent-secondary);">创建 Token →</a>
+            </p>
+            <form onsubmit="saveCfToken(event)">
+                <div class="form-group">
+                    <label>API Token</label>
+                    <input type="password" class="form-input" id="cfToken" placeholder="{{ '已配置（输入新值覆盖）' if has_cf_token else '请输入 Cloudflare API Token' }}">
+                </div>
+                <div class="form-group" style="display: flex; gap: 12px;">
+                    <button type="submit" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        保存 Token
+                    </button>
+                    <button type="button" class="btn" onclick="testCfToken()">
+                        测试连接
+                    </button>
+                </div>
+            </form>
+            
+            <div id="domainsList" style="margin-top: 16px; display: none;">
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block;">可用域名</label>
+                <div id="domainsContent"></div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Cloudflare 隧道</h3>
+            <div class="info-row" style="padding: 14px 0; border-bottom: 1px solid var(--border-color);">
+                <span class="info-label">隧道 ID</span>
+                <span class="info-value code">{{ tunnel_id or '未配置' }}</span>
+            </div>
+            <div class="info-row" style="padding: 14px 0;">
+                <span class="info-label">配置文件</span>
+                <span class="info-value code">~/.cloudflared/config.yml</span>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>系统操作</h3>
+            <div class="action-buttons">
+                <button class="btn" onclick="restartTunnel()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    重启隧道
+                </button>
+                <button class="btn" onclick="clearLogs()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    清理日志
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function changePassword(e) {
+            e.preventDefault();
+            
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                alert('两次输入的新密码不一致');
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/api/settings/password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({old_password: oldPassword, new_password: newPassword})
+                });
+                
+                const data = await resp.json();
+                if (resp.ok) {
+                    alert('密码修改成功');
+                    document.getElementById('oldPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    alert(data.error || '修改失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function saveCfToken(e) {
+            e.preventDefault();
+            
+            const token = document.getElementById('cfToken').value.trim();
+            if (!token) {
+                alert('请输入 Token');
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/api/settings/cf_token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token})
+                });
+                
+                const data = await resp.json();
+                if (resp.ok) {
+                    alert('Token 保存成功');
+                    document.getElementById('cfToken').value = '';
+                    document.getElementById('cfToken').placeholder = '已配置（输入新值覆盖）';
+                    loadDomains();
+                } else {
+                    alert(data.error || '保存失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function testCfToken() {
+            await loadDomains();
+        }
+        
+        async function loadDomains() {
+            try {
+                const resp = await fetch('/api/settings/domains');
+                const data = await resp.json();
+                
+                const container = document.getElementById('domainsList');
+                const content = document.getElementById('domainsContent');
+                
+                if (resp.ok && Array.isArray(data) && data.length > 0) {
+                    content.innerHTML = data.map(d => 
+                        `<span class="info-value code" style="display: inline-block; margin: 4px 8px 4px 0;">${d}</span>`
+                    ).join('');
+                    container.style.display = 'block';
+                } else if (resp.ok) {
+                    content.innerHTML = '<span style="color: var(--text-muted);">没有找到域名</span>';
+                    container.style.display = 'block';
+                } else {
+                    alert(data.error || '获取域名失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        async function restartTunnel() {
+            if (!confirm('确定要重启隧道吗？')) return;
+            
+            try {
+                const resp = await fetch('/api/tunnel/restart', {method: 'POST'});
+                if (resp.ok) {
+                    alert('隧道已重启');
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || '重启失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        }
+        
+        function clearLogs() {
+            alert('功能开发中');
+        }
+        
+        // 页面加载时尝试获取域名列表
+        {% if has_cf_token %}
+        loadDomains();
+        {% endif %}
+    </script>
+</body>
+</html>
