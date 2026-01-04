@@ -19,6 +19,7 @@ BRANCH="main"
 # 安装目录
 INSTALL_DIR="/opt/cloudtunnel"
 DATA_DIR="/pjdata"
+CONFIG_FILE="${INSTALL_DIR}/config.json"
 
 # ==================== 下载源配置 ====================
 
@@ -71,6 +72,50 @@ download_file() {
     local url="$1"
     local output="$2"
     curl -fL --connect-timeout 30 --max-time 600 --progress-bar -o "$output" "$url"
+}
+
+# ==================== 配置文件管理 ====================
+
+# 读取配置
+load_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        SAVED_TUNNEL_ID=$(grep -o '"tunnel_id":"[^"]*"' "$CONFIG_FILE" 2>/dev/null | cut -d'"' -f4)
+        SAVED_TUNNEL_NAME=$(grep -o '"tunnel_name":"[^"]*"' "$CONFIG_FILE" 2>/dev/null | cut -d'"' -f4)
+        SAVED_DOMAIN=$(grep -o '"domain":"[^"]*"' "$CONFIG_FILE" 2>/dev/null | cut -d'"' -f4)
+        return 0
+    fi
+    return 1
+}
+
+# 保存配置
+save_config() {
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    cat > "$CONFIG_FILE" << EOF
+{
+    "tunnel_id": "${TUNNEL_ID}",
+    "tunnel_name": "${TUNNEL_NAME}",
+    "domain": "${PANEL_DOMAIN}"
+}
+EOF
+    log_info "配置已保存到 $CONFIG_FILE"
+}
+
+# 验证隧道是否有效
+validate_tunnel() {
+    local tunnel_id="$1"
+    local cred_file="${HOME}/.cloudflared/${tunnel_id}.json"
+    
+    # 检查凭证文件
+    if [ ! -f "$cred_file" ]; then
+        return 1
+    fi
+    
+    # 检查隧道是否存在于远程
+    if ! cloudflared tunnel list 2>/dev/null | grep -q "$tunnel_id"; then
+        return 1
+    fi
+    
+    return 0
 }
 
 # ==================== 系统检测 ====================
@@ -329,41 +374,69 @@ login_cloudflare() {
 
 create_tunnel() {
     local base_name="cloudtunnel"
-    local tunnel_name=""
-    local suffix=""
     
     # 生成随机4位后缀
     generate_suffix() {
         cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 4 | head -n 1
     }
     
-    # 先尝试基础名称
-    if cloudflared tunnel list 2>/dev/null | grep -q "^[a-f0-9-]\+\s\+${base_name}\s"; then
-        TUNNEL_ID=$(cloudflared tunnel list | grep "${base_name}" | head -1 | awk '{print $1}')
-        local cred_file="${HOME}/.cloudflared/${TUNNEL_ID}.json"
+    # 尝试加载已有配置
+    if load_config && [ -n "$SAVED_TUNNEL_ID" ]; then
+        log_info "发现已有配置: $SAVED_TUNNEL_NAME ($SAVED_TUNNEL_ID)"
+        
+        if validate_tunnel "$SAVED_TUNNEL_ID"; then
+            log_info "隧道有效，复用已有配置"
+            TUNNEL_ID="$SAVED_TUNNEL_ID"
+            TUNNEL_NAME="$SAVED_TUNNEL_NAME"
+            PANEL_DOMAIN="$SAVED_DOMAIN"
+            
+            # 确保配置文件存在
+            mkdir -p ~/.cloudflared
+            cat > ~/.cloudflared/config.yml << EOF
+tunnel: ${TUNNEL_ID}
+credentials-file: ${HOME}/.cloudflared/${TUNNEL_ID}.json
+
+ingress:
+  - hostname: ${PANEL_DOMAIN}
+    service: http://localhost:5000
+  - service: http_status:404
+EOF
+            return 0
+        else
+            log_warn "已有隧道无效，将创建新隧道"
+        fi
+    fi
+    
+    # 创建新隧道
+    local tunnel_name=""
+    
+    # 检查基础名称是否可用
+    if cloudflared tunnel list 2>/dev/null | grep -q "\s${base_name}\s"; then
+        # 名称已存在，检查本地是否有凭证
+        local existing_id=$(cloudflared tunnel list | grep "\s${base_name}\s" | head -1 | awk '{print $1}')
+        local cred_file="${HOME}/.cloudflared/${existing_id}.json"
         
         if [ -f "$cred_file" ]; then
             tunnel_name="$base_name"
+            TUNNEL_ID="$existing_id"
             log_info "使用已有隧道: $tunnel_name"
         else
-            # 本地无凭证，创建新隧道
-            suffix=$(generate_suffix)
-            tunnel_name="${base_name}-${suffix}"
+            # 本地无凭证，创建带后缀的新隧道
+            tunnel_name="${base_name}-$(generate_suffix)"
             log_info "创建新隧道: $tunnel_name"
             cloudflared tunnel create "$tunnel_name"
-            TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
+            TUNNEL_ID=$(cloudflared tunnel list | grep "\s${tunnel_name}\s" | awk '{print $1}')
         fi
     else
+        # 基础名称可用
         tunnel_name="$base_name"
         log_info "创建隧道: $tunnel_name"
         cloudflared tunnel create "$tunnel_name"
-        TUNNEL_ID=$(cloudflared tunnel list | grep "$tunnel_name" | awk '{print $1}')
+        TUNNEL_ID=$(cloudflared tunnel list | grep "\s${tunnel_name}\s" | awk '{print $1}')
     fi
     
-    log_info "隧道 ID: $TUNNEL_ID"
-    
-    # 保存隧道名供后续使用
     TUNNEL_NAME="$tunnel_name"
+    log_info "隧道 ID: $TUNNEL_ID"
     
     # 创建基础配置
     mkdir -p ~/.cloudflared
@@ -644,6 +717,12 @@ generate_subdomain() {
 }
 
 setup_domain() {
+    # 如果已有域名配置，跳过
+    if [ -n "$PANEL_DOMAIN" ]; then
+        log_info "使用已有域名: $PANEL_DOMAIN"
+        return
+    fi
+    
     log_info "配置面板域名..."
     
     # 获取授权域名
@@ -679,6 +758,9 @@ EOF
     else
         log_warn "DNS 配置失败，可能需要手动配置"
     fi
+    
+    # 保存配置
+    save_config
 }
 
 # ==================== 启动服务 ====================
