@@ -22,28 +22,28 @@ DATA_DIR="/pjdata"
 
 # ==================== 下载源配置 ====================
 
-# 面板 ZIP 下载源（按优先级）
+# 面板 ZIP 下载源（国内镜像优先）
 ZIP_SOURCES=(
-    "https://github.com/${REPO}/archive/${BRANCH}.zip"
     "https://ghproxy.net/https://github.com/${REPO}/archive/${BRANCH}.zip"
     "https://gh.ddlc.top/https://github.com/${REPO}/archive/${BRANCH}.zip"
     "https://gh-proxy.com/https://github.com/${REPO}/archive/${BRANCH}.zip"
+    "https://github.com/${REPO}/archive/${BRANCH}.zip"
 )
 
-# Git Clone 源
+# Git Clone 源（国内镜像优先）
 CLONE_SOURCES=(
-    "https://github.com/${REPO}.git"
     "https://ghproxy.net/https://github.com/${REPO}.git"
     "https://gh.ddlc.top/https://github.com/${REPO}.git"
     "https://gh-proxy.com/https://github.com/${REPO}.git"
+    "https://github.com/${REPO}.git"
 )
 
-# Cloudflared 下载源（GitHub Release）
+# Cloudflared 下载源（国内镜像优先）
 CF_MIRRORS=(
-    "https://github.com"
     "https://ghproxy.net/https://github.com"
     "https://gh.ddlc.top/https://github.com"
     "https://gh-proxy.com/https://github.com"
+    "https://github.com"
 )
 
 echo -e "${CYAN}"
