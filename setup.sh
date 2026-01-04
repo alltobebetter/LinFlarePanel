@@ -525,7 +525,7 @@ ${home_dir}/stop_cloudflared.sh
 SCRIPT
     chmod +x "${home_dir}/stop_all.sh"
     
-    [ -n "$SUDO_USER" ] && chown $SUDO_USER:$SUDO_USER "${home_dir}"/*.sh
+    [ -n "$SUDO_USER" ] && chown $SUDO_USER:$SUDO_USER "${home_dir}"/*.sh || true
 }
 
 create_systemd_services() {
